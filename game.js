@@ -178,6 +178,14 @@ function changeLevel( level ) {
   overlay.hidden = true;
 }
 
+// Espacio / botón táctil de acción: lanzar, continuar o reiniciar según la fase
+function primaryAction() {
+  if ( state.phase === 'paused' ) resume();
+  else if ( isGameOver() ) restart();
+  else if ( state.phase === 'levelClear' ) nextLevel();
+  else launchBall();
+}
+
 const PAUSE_KEYS = [ 'KeyP', 'Escape' ];
 const LEFT_KEYS = [ 'ArrowLeft', 'KeyA' ];
 const RIGHT_KEYS = [ 'ArrowRight', 'KeyD' ];
@@ -193,11 +201,7 @@ function handleKey( e, pressed ) {
   } else if ( RIGHT_KEYS.includes( e.code ) ) {
     state.input.right = pressed;
   } else if ( e.code === 'Space' ) {
-    if ( pressed && !e.repeat ) {
-      if ( isGameOver() ) restart();
-      else if ( state.phase === 'levelClear' ) nextLevel();
-      else launchBall();
-    }
+    if ( pressed && !e.repeat ) primaryAction();
   } else {
     return;
   }
@@ -219,7 +223,27 @@ canvas.addEventListener( 'pointermove', movePaddleTo );
 canvas.addEventListener( 'pointerdown', movePaddleTo );
 
 canvas.addEventListener( 'click', launchBall );
-document.getElementById( 'pause-button' ).addEventListener( 'click', pause );
+
+// Botones táctiles de dirección: mover mientras se mantienen pulsados
+function bindHoldButton( id, dir ) {
+  const button = document.getElementById( id );
+  const release = () => { state.input[ dir ] = false; };
+  button.addEventListener( 'pointerdown', ( e ) => {
+    e.preventDefault();
+    if ( state.phase === 'paused' ) return;
+    button.setPointerCapture( e.pointerId );
+    state.input[ dir ] = true;
+  } );
+  button.addEventListener( 'pointerup', release );
+  button.addEventListener( 'pointercancel', release );
+  button.addEventListener( 'lostpointercapture', release );
+  button.addEventListener( 'contextmenu', ( e ) => e.preventDefault() );
+}
+
+bindHoldButton( 'left-button', 'left' );
+bindHoldButton( 'right-button', 'right' );
+document.getElementById( 'action-button' ).addEventListener( 'click', primaryAction );
+document.getElementById( 'pause-button' ).addEventListener( 'click', togglePause );
 overlay.addEventListener( 'click', () => {
   if ( state.phase === 'levelClear' ) nextLevel();
   else restart();

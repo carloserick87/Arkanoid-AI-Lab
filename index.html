@@ -7,10 +7,17 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="wrapper">
-    <canvas id="game" width="800" height="600"></canvas>
-    <button id="pause-button" type="button" aria-label="Pausa">❚❚</button>
-    <div id="overlay" hidden></div>
+  <div id="stage">
+    <div id="wrapper">
+      <canvas id="game" width="800" height="600"></canvas>
+      <div id="overlay" hidden></div>
+    </div>
+
+    <!-- Controles táctiles: solo visibles en pantallas táctiles -->
+    <button id="left-button" class="touch-control" type="button" aria-label="Izquierda">◀</button>
+    <button id="pause-button" class="touch-control" type="button" aria-label="Pausa">❚❚</button>
+    <button id="action-button" class="touch-control" type="button" aria-label="Lanzar">●</button>
+    <button id="right-button" class="touch-control" type="button" aria-label="Derecha">▶</button>
   </div>
 
   <script src="assets/spritesheet.js"></script>

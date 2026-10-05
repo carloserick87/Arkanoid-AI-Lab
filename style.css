@@ -21,10 +21,17 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-/* Escala 4:3 para caber en pantalla (móvil incluido) */
+#stage {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  align-items: center;
+}
+
+/* Escala 4:3 para caber en pantalla */
 #wrapper {
   position: relative;
-  width: min( 800px, 100%, ( 100dvh - 16px ) * 4 / 3 );
+  width: min( 800px, 100vw - 16px, ( 100dvh - 16px ) * 4 / 3 );
   aspect-ratio: 4 / 3;
 }
 
@@ -68,20 +75,71 @@ button:hover {
   background: #444;
 }
 
-/* Solo en pantallas táctiles; el overlay lo tapa al pausar */
-#pause-button {
+/* Controles táctiles: ocultos salvo en pantallas táctiles */
+.touch-control {
   display: none;
-  position: absolute;
-  top: 7%;
-  right: 2%;
-  padding: 4px 10px;
-  font-size: 14px;
-  opacity: 0.8;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  font-size: 24px;
+  background: rgba( 255, 255, 255, 0.08 );
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
+.touch-control:active {
+  background: rgba( 255, 255, 255, 0.3 );
+}
+
+#left-button { grid-area: left; }
+#right-button { grid-area: right; }
+#pause-button { grid-area: pause; font-size: 18px; }
+#action-button { grid-area: action; }
+
 @media ( hover: none ) and ( pointer: coarse ) {
-  #pause-button {
+  #stage {
+    --control: 72px;
+  }
+
+  #wrapper {
+    grid-area: game;
+  }
+
+  .touch-control {
     display: block;
+  }
+
+  /* Vertical: controles en fila bajo el canvas */
+  @media ( orientation: portrait ) {
+    #stage {
+      grid-template-columns: repeat( 4, 1fr );
+      grid-template-rows: auto var( --control );
+      grid-template-areas:
+        "game game game game"
+        "left pause action right";
+    }
+
+    #wrapper {
+      width: min( 800px, 100vw - 16px, ( 100dvh - 24px - var( --control ) ) * 4 / 3 );
+    }
+  }
+
+  /* Horizontal: controles a los lados del canvas */
+  @media ( orientation: landscape ) {
+    #stage {
+      grid-template-columns: var( --control ) auto var( --control );
+      grid-template-rows: 1fr 2fr;
+      grid-template-areas:
+        "pause game action"
+        "left game right";
+    }
+
+    #wrapper {
+      width: min( 800px, 100vw - 32px - 2 * var( --control ), ( 100dvh - 16px ) * 4 / 3 );
+    }
   }
 }
 
