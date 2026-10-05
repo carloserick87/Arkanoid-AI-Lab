@@ -24,31 +24,25 @@ const POINTS_PER_BRICK = 10;
 
 const MAX_DT = 1 / 30;
 
-function createBricks() {
-  const bricks = [];
-  for ( let row = 0; row < BRICK_ROWS; row++ ) {
-    for ( let col = 0; col < BRICK_COLS; col++ ) {
-      bricks.push( {
-        x: BRICK_OFFSET_X + col * BRICK_W,
-        y: BRICK_OFFSET_Y + row * BRICK_H,
-        color: ROW_COLORS[ row ],
-        alive: true,
-      } );
-    }
-  }
-  return bricks;
-}
-
 const state = {
-  phase: 'serve',                 // 'serve' | 'playing' | 'won' | 'lost'
+  phase: 'serve',                 // 'serve' | 'playing' | 'levelClear' | 'won' | 'lost'
+  level: 1,                       // 1..MAX_LEVEL
   score: 0,
   lives: START_LIVES,
   paddle: { x: ( CANVAS_W - PADDLE_W ) / 2 }, // x = borde izquierdo
   ball: { x: 0, y: 0, vx: 0, vy: 0 }, // x, y = esquina superior izquierda
-  bricks: createBricks(),         // { x, y, color, alive }
+  bricks: [],                     // { x, y, color, alive }
   explosions: [],                 // { x, y, color, start }, start = timestamp en ms
   input: { left: false, right: false },
 };
+
+// ?level=N (entero 1..MAX_LEVEL) para empezar en el nivel N; si no, nivel 1
+const startLevel = Number( new URLSearchParams( location.search ).get( 'level' ) );
+if ( Number.isInteger( startLevel ) && startLevel >= 1 && startLevel <= MAX_LEVEL ) {
+  state.level = startLevel;
+}
+
+state.bricks = createLevelBricks( state.level );
 
 const canvas = document.getElementById( 'game' );
 const ctx = canvas.getContext( '2d' );
@@ -71,24 +65,46 @@ function clampPaddle() {
 function launchBall() {
   if ( state.phase !== 'serve' ) return;
   state.ball.vx = 0;
-  state.ball.vy = -BALL_SPEED;
+  state.ball.vy = -ballSpeed( state.level );
   state.phase = 'playing';
 }
 
-function showOverlay( title ) {
+function showOverlay( title, lines ) {
   const heading = document.createElement( 'h1' );
   heading.textContent = title;
-  const score = document.createElement( 'p' );
-  score.textContent = `Puntuación: ${ state.score }`;
-  const hint = document.createElement( 'p' );
-  hint.textContent = 'Clic o Espacio para jugar de nuevo';
-  overlay.replaceChildren( heading, score, hint );
+  const paragraphs = lines.map( ( text ) => {
+    const p = document.createElement( 'p' );
+    p.textContent = text;
+    return p;
+  } );
+  overlay.replaceChildren( heading, ...paragraphs );
   overlay.hidden = false;
 }
 
 function endGame( phase ) {
   state.phase = phase;
-  showOverlay( phase === 'won' ? '¡Victoria!' : 'Game Over' );
+  const lines = [ `Puntuación: ${ state.score }` ];
+  if ( phase === 'lost' ) lines.push( `Nivel alcanzado: ${ state.level }` );
+  lines.push( 'Clic o Espacio para jugar de nuevo' );
+  showOverlay( phase === 'won' ? '¡Victoria!' : 'Game Over', lines );
+}
+
+function clearLevel() {
+  state.phase = 'levelClear';
+  showOverlay( `¡Nivel ${ state.level } superado!`, [
+    `Puntuación: ${ state.score }`,
+    'Clic o Espacio para continuar',
+  ] );
+}
+
+// Puntos y vidas se mantienen entre niveles
+function nextLevel() {
+  if ( state.phase !== 'levelClear' ) return;
+  state.level++;
+  state.bricks = createLevelBricks( state.level );
+  state.explosions = [];
+  state.phase = 'serve';
+  overlay.hidden = true;
 }
 
 function isGameOver() {
@@ -97,9 +113,10 @@ function isGameOver() {
 
 function restart() {
   if ( !isGameOver() ) return;
+  state.level = 1;
   state.score = 0;
   state.lives = START_LIVES;
-  state.bricks = createBricks();
+  state.bricks = createLevelBricks( state.level );
   state.phase = 'serve';
   overlay.hidden = true;
 }
@@ -115,6 +132,7 @@ function handleKey( e, pressed ) {
   } else if ( e.code === 'Space' ) {
     if ( pressed && !e.repeat ) {
       if ( isGameOver() ) restart();
+      else if ( state.phase === 'levelClear' ) nextLevel();
       else launchBall();
     }
   } else {
@@ -133,7 +151,10 @@ canvas.addEventListener( 'mousemove', ( e ) => {
 } );
 
 canvas.addEventListener( 'click', launchBall );
-overlay.addEventListener( 'click', restart );
+overlay.addEventListener( 'click', () => {
+  if ( state.phase === 'levelClear' ) nextLevel();
+  else restart();
+} );
 
 function stickBallToPaddle() {
   state.ball.x = state.paddle.x + ( PADDLE_W - BALL_SIZE ) / 2;
@@ -195,7 +216,8 @@ function updateBall( dt ) {
     state.explosions.push( { x: brick.x, y: brick.y, color: brick.color, start: performance.now() } );
     playSound( breakSound );
     if ( !state.bricks.some( ( b ) => b.alive ) ) {
-      endGame( 'won' );
+      if ( state.level < MAX_LEVEL ) clearLevel();
+      else endGame( 'won' );
       return;
     }
   }
@@ -212,8 +234,9 @@ function updateBall( dt ) {
     const paddleCenter = state.paddle.x + PADDLE_W / 2;
     const offset = Math.max( -1, Math.min( ( ballCenter - paddleCenter ) / ( PADDLE_W / 2 ), 1 ) );
     const angle = offset * MAX_BOUNCE_ANGLE;
-    ball.vx = BALL_SPEED * Math.sin( angle );
-    ball.vy = -BALL_SPEED * Math.cos( angle );
+    const speed = ballSpeed( state.level );
+    ball.vx = speed * Math.sin( angle );
+    ball.vy = -speed * Math.cos( angle );
     playSound( bounceSound );
     ball.y = PADDLE_Y - BALL_SIZE;
   }
@@ -259,6 +282,9 @@ function renderHud() {
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText( `Puntos: ${ state.score }`, 20, 30 );
+
+  ctx.textAlign = 'center';
+  ctx.fillText( `Nivel ${ state.level }/${ MAX_LEVEL }`, CANVAS_W / 2, 30 );
 
   // Vidas como sprites de la bola, alineadas a la derecha
   const livesRight = CANVAS_W - 20;
