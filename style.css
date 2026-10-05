@@ -11,24 +11,29 @@ body {
 
 body {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 8px;
   background: #2a2a2a;
   color: #fff;
+  overflow: hidden;
   font-family: system-ui, sans-serif;
 }
 
+/* Escala 4:3 para caber en pantalla (móvil incluido) */
 #wrapper {
   position: relative;
-  width: 800px;
-  height: 600px;
+  width: min( 800px, 100%, ( 100dvh - 16px ) * 4 / 3 );
+  aspect-ratio: 4 / 3;
 }
 
 #game {
   display: block;
-  width: 800px;
-  height: 600px;
+  width: 100%;
+  height: 100%;
   background: #000;
+  touch-action: none;
 }
 
 #overlay {
@@ -39,10 +44,83 @@ body {
   align-items: center;
   justify-content: center;
   gap: 16px;
+  padding: 8px;
   background: rgba( 0, 0, 0, 0.75 );
   text-align: center;
+  overflow-y: auto;
 }
 
 #overlay[hidden] {
   display: none;
+}
+
+button {
+  padding: 8px 16px;
+  border: 1px solid #fff;
+  border-radius: 4px;
+  background: #222;
+  color: #fff;
+  font: bold 16px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #444;
+}
+
+/* Solo en pantallas táctiles; el overlay lo tapa al pausar */
+#pause-button {
+  display: none;
+  position: absolute;
+  top: 7%;
+  right: 2%;
+  padding: 4px 10px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+@media ( hover: none ) and ( pointer: coarse ) {
+  #pause-button {
+    display: block;
+  }
+}
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat( 5, 48px );
+  gap: 8px;
+}
+
+.level-grid button {
+  padding: 8px 0;
+}
+
+.level-grid button.current {
+  background: #fff;
+  color: #000;
+}
+
+@media ( max-width: 600px ), ( max-height: 500px ) {
+  #overlay {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  #overlay h1 {
+    font-size: 1.6em;
+  }
+
+  button {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+
+  .level-grid {
+    grid-template-columns: repeat( 5, 36px );
+    gap: 6px;
+  }
+
+  .level-grid button {
+    padding: 4px 0;
+  }
 }

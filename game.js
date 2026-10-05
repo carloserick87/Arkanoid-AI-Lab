@@ -9,7 +9,7 @@ const BRICK_OFFSET_X = 80;        // (800 - 10*64) / 2
 const BRICK_OFFSET_Y = 80;
 const ROW_COLORS = [ 'red', 'yellow', 'cyan', 'magenta', 'hotpink', 'green' ];
 
-const PADDLE_W = 162;             // tamaño nativo del sprite
+const PADDLE_W = 81;              // mitad del sprite nativo (162)
 const PADDLE_H = 14;
 const PADDLE_Y = CANVAS_H - 40;
 const PADDLE_SPEED = 480;         // px/s con teclado
@@ -25,7 +25,8 @@ const POINTS_PER_BRICK = 10;
 const MAX_DT = 1 / 30;
 
 const state = {
-  phase: 'serve',                 // 'serve' | 'playing' | 'levelClear' | 'won' | 'lost'
+  phase: 'serve',                 // 'serve' | 'playing' | 'paused' | 'levelClear' | 'won' | 'lost'
+  pausedFrom: null,               // fase a la que vuelve al reanudar ('serve' | 'playing')
   level: 1,                       // 1..MAX_LEVEL
   score: 0,
   lives: START_LIVES,
@@ -69,7 +70,7 @@ function launchBall() {
   state.phase = 'playing';
 }
 
-function showOverlay( title, lines ) {
+function showOverlay( title, lines, extra = [] ) {
   const heading = document.createElement( 'h1' );
   heading.textContent = title;
   const paragraphs = lines.map( ( text ) => {
@@ -77,7 +78,7 @@ function showOverlay( title, lines ) {
     p.textContent = text;
     return p;
   } );
-  overlay.replaceChildren( heading, ...paragraphs );
+  overlay.replaceChildren( heading, ...paragraphs, ...extra );
   overlay.hidden = false;
 }
 
@@ -121,11 +122,73 @@ function restart() {
   overlay.hidden = true;
 }
 
+function canPause() {
+  return state.phase === 'serve' || state.phase === 'playing';
+}
+
+function pause() {
+  if ( !canPause() ) return;
+  state.pausedFrom = state.phase;
+  state.phase = 'paused';
+  state.input.left = false;
+  state.input.right = false;
+
+  const resumeButton = document.createElement( 'button' );
+  resumeButton.textContent = 'Continuar';
+  resumeButton.addEventListener( 'click', resume );
+
+  const levelLabel = document.createElement( 'p' );
+  levelLabel.textContent = 'Cambiar de nivel (reinicia puntos y vidas):';
+
+  const levelGrid = document.createElement( 'div' );
+  levelGrid.className = 'level-grid';
+  for ( let level = 1; level <= MAX_LEVEL; level++ ) {
+    const button = document.createElement( 'button' );
+    button.textContent = level;
+    if ( level === state.level ) button.className = 'current';
+    button.addEventListener( 'click', () => changeLevel( level ) );
+    levelGrid.append( button );
+  }
+
+  showOverlay( 'Pausa', [], [ resumeButton, levelLabel, levelGrid ] );
+}
+
+function resume() {
+  if ( state.phase !== 'paused' ) return;
+  state.phase = state.pausedFrom;
+  state.pausedFrom = null;
+  overlay.hidden = true;
+}
+
+function togglePause() {
+  if ( state.phase === 'paused' ) resume();
+  else pause();
+}
+
+// Empezar en otro nivel: partida nueva desde ese nivel
+function changeLevel( level ) {
+  if ( state.phase !== 'paused' ) return;
+  state.level = level;
+  state.score = 0;
+  state.lives = START_LIVES;
+  state.bricks = createLevelBricks( level );
+  state.explosions = [];
+  state.phase = 'serve';
+  state.pausedFrom = null;
+  overlay.hidden = true;
+}
+
+const PAUSE_KEYS = [ 'KeyP', 'Escape' ];
 const LEFT_KEYS = [ 'ArrowLeft', 'KeyA' ];
 const RIGHT_KEYS = [ 'ArrowRight', 'KeyD' ];
 
 function handleKey( e, pressed ) {
-  if ( LEFT_KEYS.includes( e.code ) ) {
+  if ( PAUSE_KEYS.includes( e.code ) ) {
+    if ( pressed && !e.repeat ) togglePause();
+  } else if ( state.phase === 'paused' ) {
+    if ( e.code !== 'Space' ) return;
+    if ( pressed && !e.repeat ) resume();
+  } else if ( LEFT_KEYS.includes( e.code ) ) {
     state.input.left = pressed;
   } else if ( RIGHT_KEYS.includes( e.code ) ) {
     state.input.right = pressed;
@@ -144,13 +207,19 @@ function handleKey( e, pressed ) {
 document.addEventListener( 'keydown', ( e ) => handleKey( e, true ) );
 document.addEventListener( 'keyup', ( e ) => handleKey( e, false ) );
 
-canvas.addEventListener( 'mousemove', ( e ) => {
+// Ratón y táctil; el canvas puede estar escalado por CSS
+function movePaddleTo( e ) {
+  if ( state.phase === 'paused' ) return;
   const rect = canvas.getBoundingClientRect();
-  state.paddle.x = e.clientX - rect.left - PADDLE_W / 2;
+  state.paddle.x = ( e.clientX - rect.left ) * CANVAS_W / rect.width - PADDLE_W / 2;
   clampPaddle();
-} );
+}
+
+canvas.addEventListener( 'pointermove', movePaddleTo );
+canvas.addEventListener( 'pointerdown', movePaddleTo );
 
 canvas.addEventListener( 'click', launchBall );
+document.getElementById( 'pause-button' ).addEventListener( 'click', pause );
 overlay.addEventListener( 'click', () => {
   if ( state.phase === 'levelClear' ) nextLevel();
   else restart();
@@ -250,6 +319,8 @@ function updateBall( dt ) {
 }
 
 function update( dt ) {
+  if ( state.phase === 'paused' ) return;
+
   const dir = ( state.input.right ? 1 : 0 ) - ( state.input.left ? 1 : 0 );
   if ( dir !== 0 ) {
     state.paddle.x += dir * PADDLE_SPEED * dt;
